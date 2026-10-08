@@ -70,7 +70,7 @@ def home():
                         document.getElementById('sSign').innerText = d.sun_sign;
                         document.getElementById('res').style.display = 'block';
                     } else {
-                        alert('ගණනය කිරීමේ දෝෂයක් ඇත! දිනය සහ වෙලාව නිවැරදිව දෙන්න.');
+                        alert('Error: ' + (d.error || 'ගණනය කිරීමේ දෝෂයක් ඇත!'));
                     }
                 } catch(e) {
                     alert('Error Connecting to Server!');
@@ -84,7 +84,9 @@ def home():
 @app.get("/calculate")
 def calculate(date: str, time: str, lat: float, lon: float):
     try:
-        dt = Datetime(date, time, '+05:30')
+        # Format date string safely for flatlib (YYYY/MM/DD)
+        formatted_date = date.replace("-", "/")
+        dt = Datetime(formatted_date, time, '+05:30')
         pos = GeoPos(lat, lon)
         chart = Chart(dt, pos, IDs=const.LIST_OBJECTS, sys=const.HOUSES_PLACIDUS)
         
