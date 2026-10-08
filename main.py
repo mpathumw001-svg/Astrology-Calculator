@@ -4,13 +4,13 @@ from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 from flatlib.chart import Chart
 from flatlib import const
-from flatlib.ephem import swe
+import swisseph as swe
 from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# Set Swiss Ephemeris Ayanamsa to Lahiri (Nirayana System)
-swe.setAyanamsa(const.AYANAMSA_LAHIRI)
+# Set Swiss Ephemeris Sidereal mode to Lahiri (Code 0 = SIDM_LAHIRI)
+swe.set_sid_mode(0)
 
 NAKSHATRAS = [
     ("අස්විද", "Ketu", 7), ("බෙරණ", "Venus", 20), ("කැති", "Sun", 6),
@@ -249,8 +249,8 @@ def calculate(date: str, time: str, lat: float, lon: float):
         
         moon = chart.get(const.MOON)
         
-        # Calculate Lahiri Ayanamsa Offset for exact datetime
-        ayanamsa_offset = swe.getAyanamsa(dt.jd)
+        # Calculate Lahiri Ayanamsa Offset for Julian Day
+        ayanamsa_offset = swe.get_ayanamsa_ut(dt.jd)
         sidereal_moon_lon = (moon.lon - ayanamsa_offset) % 360
         
         nak_name, lord, years_rem, timeline = get_dasha_info(sidereal_moon_lon, formatted_date)
