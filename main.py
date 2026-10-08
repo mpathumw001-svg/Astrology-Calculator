@@ -4,6 +4,10 @@ from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 from flatlib.chart import Chart
 from flatlib import const
+from flatlib.ephem import swe
+
+# Enable built-in ephemeris path to fix SwissEph missing file issue
+swe.setPath()
 
 app = FastAPI()
 
@@ -84,7 +88,6 @@ def home():
 @app.get("/calculate")
 def calculate(date: str, time: str, lat: float, lon: float):
     try:
-        # Format date string safely for flatlib (YYYY/MM/DD)
         formatted_date = date.replace("-", "/")
         dt = Datetime(formatted_date, time, '+05:30')
         pos = GeoPos(lat, lon)
