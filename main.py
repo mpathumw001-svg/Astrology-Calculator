@@ -4,13 +4,13 @@ from flatlib.datetime import Datetime
 from flatlib.geopos import GeoPos
 from flatlib.chart import Chart
 from flatlib import const
-from flatlib import ayanamsa
+from flatlib.ephem import swe
 from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# Set Sidereal / Lahiri Ayanamsa for Vedic Astrology
-ayanamsa.setMode(const.AYANAMSA_LAHIRI)
+# Set Swiss Ephemeris Ayanamsa to Lahiri (Nirayana System)
+swe.setAyanamsa(const.AYANAMSA_LAHIRI)
 
 NAKSHATRAS = [
     ("අස්විද", "Ketu", 7), ("බෙරණ", "Venus", 20), ("කැති", "Sun", 6),
@@ -165,7 +165,7 @@ def home():
             <button onclick="calc()">ගණනය කරන්න</button>
 
             <div id="res">
-                <p>සඳු රාශිය (Nirayana/Sidereal): <b id="mSign" style="color:#38bdf8"></b></p>
+                <p>සඳු සිටින ස්ථානය (Nirayana Longitude): <b id="mLon" style="color:#38bdf8"></b>°</p>
                 <p>උපන් නැකත: <b id="nak" style="color:#38bdf8"></b></p>
                 <p>උපතේදී මහ දශාව: <b id="dLord" style="color:#38bdf8"></b></p>
                 <p>දශා ශේෂය: <b id="dBal" style="color:#38bdf8"></b> වසර</p>
@@ -198,9 +198,7 @@ def home():
                         document.getElementById('lt').value = data[0].lat;
                         document.getElementById('ln').value = data[0].lon;
                         alert(`ස්ථානය සොයාගන්නා ලදී: ${data[0].display_name}`);
-                    } else {
-                        alert('ස්ථානය සොයාගත නොහැකි විය.');
-                    }
+                    } else { alert('ස්ථානය සොයාගත නොහැකි විය.'); }
                 } catch(e) { alert('Location Search Error!'); }
             }
 
@@ -214,8 +212,8 @@ def home():
                     const r = await fetch(`/calculate?date=${encodeURIComponent(dt)}&time=${encodeURIComponent(tm)}&lat=${lt}&lon=${ln}`);
                     const d = await r.json();
 
-                    if(d.moon_sign) {
-                        document.getElementById('mSign').innerText = d.moon_sign;
+                    if(d.sidereal_moon_lon !== undefined) {
+                        document.getElementById('mLon').innerText = Number(d.sidereal_moon_lon).toFixed(2);
                         document.getElementById('nak').innerText = d.nakshatra;
                         document.getElementById('dLord').innerText = d.dasha_lord;
                         document.getElementById('dBal').innerText = Number(d.balance_years).toFixed(2);
@@ -247,13 +245,13 @@ def calculate(date: str, time: str, lat: float, lon: float):
         formatted_date = date.replace("-", "/")
         dt = Datetime(formatted_date, time, '+05:30')
         pos = GeoPos(lat, lon)
-        chart = Chart(dt, pos, mode=const.AYANAMSA_LAHIRI)
+        chart = Chart(dt, pos)
         
         moon = chart.get(const.MOON)
         
-        # Calculate Sidereal Longitude using Lahiri Ayanamsa
-        ay_val = ayanamsa.get(dt, const.AYANAMSA_LAHIRI)
-        sidereal_moon_lon = (moon.lon - ay_val) % 360
+        # Calculate Lahiri Ayanamsa Offset for exact datetime
+        ayanamsa_offset = swe.getAyanamsa(dt.jd)
+        sidereal_moon_lon = (moon.lon - ayanamsa_offset) % 360
         
         nak_name, lord, years_rem, timeline = get_dasha_info(sidereal_moon_lon, formatted_date)
         
