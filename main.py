@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# Nakshatra Names & Lords (Vimshottari Dasha Order)
 NAKSHATRAS = [
     ("අස්විද", "Ketu", 7), ("බෙරණ", "Venus", 20), ("කැති", "Sun", 6),
     ("රෙහෙණ", "Moon", 10), ("මුවසිරස", "Mars", 7), ("අද", "Rahu", 18),
@@ -24,34 +23,65 @@ NAKSHATRAS = [
 DASHA_ORDER = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
 DASHA_YEARS = {"Ketu": 7, "Venus": 20, "Sun": 6, "Moon": 10, "Mars": 7, "Rahu": 18, "Jupiter": 16, "Saturn": 19, "Mercury": 17}
 
+def calculate_antardashas(major_lord, start_dt, dasha_duration_years):
+    antardashas = []
+    curr_dt = start_dt
+    start_idx = DASHA_ORDER.index(major_lord)
+    
+    for i in range(9):
+        sub_lord = DASHA_ORDER[(start_idx + i) % 9]
+        # Antardasha duration = (Major Dasha Years * Sub Dasha Years) / 120
+        sub_years = (DASHA_YEARS[major_lord] * DASHA_YEARS[sub_lord]) / 120.0
+        # If calculating balance for the first dasha, scale proportionally
+        actual_sub_years = sub_years * (dasha_duration_years / DASHA_YEARS[major_lord])
+        
+        end_dt = curr_dt + timedelta(days=actual_sub_years * 365.25)
+        antardashas.append({
+            "sub_lord": sub_lord,
+            "start": curr_dt.strftime('%Y-%m-%d'),
+            "end": end_dt.strftime('%Y-%m-%d')
+        })
+        curr_dt = end_dt
+        
+    return antardashas
+
 def get_dasha_info(moon_lon, birth_date_str):
-    # 1 Nakshatra = 13.333333 degrees (13° 20')
     nak_index = int(moon_lon / 13.333333333333334)
     nak_name, lord, total_years = NAKSHATRAS[nak_index]
     
-    # Calculate balance of dasha
     deg_in_nak = moon_lon % 13.333333333333334
     fraction_passed = deg_in_nak / 13.333333333333334
     years_remaining = total_years * (1 - fraction_passed)
     
     birth_dt = datetime.strptime(birth_date_str, "%Y/%m/%d")
     
-    # Build timeline
     timeline = []
     current_date = birth_dt
     
-    # First Dasha (Balance)
+    # 1. First Dasha (Balance)
     end_date = current_date + timedelta(days=years_remaining * 365.25)
-    timeline.append(f"<b>{lord} මහ දශාව (ශේෂය):</b> {current_date.strftime('%Y-%m-%d')} සිට {end_date.strftime('%Y-%m-%d')} දක්වා")
+    subs = calculate_antardashas(lord, current_date, years_remaining)
+    timeline.append({
+        "major_lord": f"{lord} (ශේෂය)",
+        "start": current_date.strftime('%Y-%m-%d'),
+        "end": end_date.strftime('%Y-%m-%d'),
+        "sub_dashas": subs
+    })
     current_date = end_date
     
-    # Subsequent Dashas
+    # 2. Subsequent Dashas
     start_lord_idx = DASHA_ORDER.index(lord)
     for i in range(1, 9):
         next_lord = DASHA_ORDER[(start_lord_idx + i) % 9]
         dur = DASHA_YEARS[next_lord]
         end_date = current_date + timedelta(days=dur * 365.25)
-        timeline.append(f"<b>{next_lord} මහ දශාව:</b> {current_date.strftime('%Y-%m-%d')} සිට {end_date.strftime('%Y-%m-%d')} දක්වා")
+        subs = calculate_antardashas(next_lord, current_date, dur)
+        timeline.append({
+            "major_lord": next_lord,
+            "start": current_date.strftime('%Y-%m-%d'),
+            "end": end_date.strftime('%Y-%m-%d'),
+            "sub_dashas": subs
+        })
         current_date = end_date
         
     return nak_name, lord, years_remaining, timeline
@@ -64,22 +94,25 @@ def home():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Astrology Engine</title>
+        <title>Astrology Engine - Dasha & Antardasha</title>
         <style>
             body { font-family: sans-serif; background: #0f172a; color: #fff; padding: 20px; display: flex; justify-content: center; }
-            .box { background: #1e293b; padding: 25px; border-radius: 12px; width: 100%; max-width: 480px; border: 1px solid #334155; }
+            .box { background: #1e293b; padding: 25px; border-radius: 12px; width: 100%; max-width: 550px; border: 1px solid #334155; }
             h2 { color: #38bdf8; text-align: center; margin-top: 0; }
             label { display: block; margin-top: 10px; color: #94a3b8; font-size: 14px; }
             input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
             button { width: 100%; margin-top: 20px; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
             button:hover { background: #0369a1; }
             #res { margin-top: 20px; padding: 15px; background: #0f172a; border-radius: 6px; border-left: 4px solid #38bdf8; display: none; }
-            .timeline { font-size: 13px; line-height: 1.6; margin-top: 10px; color: #cbd5e1; }
+            details { margin-bottom: 8px; background: #1e293b; padding: 8px; border-radius: 6px; }
+            summary { cursor: pointer; font-weight: bold; color: #38bdf8; }
+            .sub-list { margin-top: 8px; padding-left: 15px; font-size: 13px; color: #cbd5e1; }
+            .sub-item { margin-bottom: 4px; }
         </style>
     </head>
     <body>
         <div class="box">
-            <h2>ජ්‍යොතිෂ & දශා Calculator</h2>
+            <h2>ජ්‍යොතිෂ, මහ දශා & අන්තර දශා</h2>
             <label>උපන් දිනය (YYYY/MM/DD):</label>
             <input type="text" id="dt" value="1989/11/06">
             
@@ -100,8 +133,8 @@ def home():
                 <p>උපතේදී මහ දශාව: <b id="dLord" style="color:#38bdf8"></b></p>
                 <p>දශා ශේෂය: <b id="dBal" style="color:#38bdf8"></b> වසර</p>
                 <hr style="border-color:#334155;">
-                <h4>මහ දශා කාලසීමාවන්:</h4>
-                <div id="tline" class="timeline"></div>
+                <h4>මහ දශා සහ අන්තර දශාවන්:</h4>
+                <div id="tline"></div>
             </div>
         </div>
 
@@ -124,7 +157,13 @@ def home():
                         
                         let html = '';
                         d.timeline.forEach(item => {
-                            html += `<div>• ${item}</div>`;
+                            html += `<details>`;
+                            html += `<summary>${item.major_lord} මහ දශාව: ${item.start} සිට ${item.end}</summary>`;
+                            html += `<div class="sub-list">`;
+                            item.sub_dashas.forEach(sub => {
+                                html += `<div class="sub-item">• <b>${sub.sub_lord} අන්තරය:</b> ${sub.start} සිට ${sub.end}</div>`;
+                            });
+                            html += `</div></details>`;
                         });
                         document.getElementById('tline').innerHTML = html;
                         
